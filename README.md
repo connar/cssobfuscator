@@ -13,6 +13,8 @@ Since its a PoC, the techniques to store data in the css are not extensive. The 
 - `conic-gradient(from [num]deg, [color], [color])`: Uses `conic-gradient()` to hide a byte at `deg`.
 - `order`: Uses `order` to hide a byte.
 
+> You can of course use more css elements. Take a read on the [css docs](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/Data_types) and extend it to your liking.
+
 **Hiding driveby executables in PNG**:  
 For driveby download PoC's, the executable is hidden encrypted in a PNG that is pulled dynamically from your server. The obfuscated js handles the extraction of the bytes and their decryption. Specifically:  
 - The LSB is used within the Alpha Channel of the PNG.
