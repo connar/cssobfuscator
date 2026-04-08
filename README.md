@@ -19,6 +19,7 @@ For driveby download PoC's, the executable is hidden encrypted in a PNG that is 
 - A unique key is generated on obfuscation time to xor the bytes (every run different key).
 - On runtime, a canvas element (which is never added to the page) is used to load and draw the image. By using getImageData, RGBA values are extracted. The binary is rebuilded by taking the last bit of every 4th byte and then xor decrypting it.
 
+> *I originally wanted to do it via `.ico` and have it load in the tab ([ref.1](https://morph3.blog/posts/Exotic-ways-of-hiding-shellcode-Part-1-Icons/) & [ref.2](https://arxiv.org/pdf/2507.09074)) but I ended up using a png.*
 
 **Requirements**:  
 You need:  
