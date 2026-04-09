@@ -13,7 +13,6 @@ class CssObfuscator:
         self.payload_key = random.randint(30, 90)
         self.stego_payload = ""
         
-        # objects and properties that won't get obfuscated
         self.protected = {
             'window', 'document', 'console', 'navigator', 'clipboard', 'atob', 'btoa', 
             'Uint8Array', 'Blob', 'URL', 'parseInt', 'setTimeout', 'getComputedStyle', 
@@ -86,7 +85,6 @@ class CssObfuscator:
             return f"{prefix}__KEY_START__{key_name}__KEY_END__:"
 
         js_code = re.sub(r'([{,]\s*)([\'"]?)([a-zA-Z0-9_$][\w$-]*)\2\s*:', structural_key_fixer, js_code)
-
         id_patterns = [r'\b(?:const|let|var)\s+([a-zA-Z_$][\w$]*)', r'function\s*([a-zA-Z_$][\w$]*)*\s*\(([^)]*)\)']
         for pattern in id_patterns:
             for m in re.finditer(pattern, js_code):
@@ -101,7 +99,6 @@ class CssObfuscator:
         lines = js_code.split('\n')
         processed_lines = []
         in_multicomment = False
-
         for line in lines:
             if not in_multicomment:
                 if line.strip().startswith('/*'):
@@ -143,87 +140,70 @@ class CssObfuscator:
         
         base_name = os.path.splitext(os.path.basename(input_file))[0]
         output_dir = os.path.join(os.getcwd(), base_name)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        if not os.path.exists(output_dir): os.makedirs(output_dir)
+
+        # 1. Load Templates
+        core_path = os.path.dirname(__file__)
+        main_tpl_path = os.path.join(core_path, "template.js")
+        stego_tpl_path = os.path.join(core_path, "stego_template.js")
 
         with open(input_file, "r") as f: user_js = f.read()
 
+        # 2. Variable Generation
         r_map, r_glob, r_pay_var = self.get_id(7), self.get_id(7), self.get_id(7)
         r_res_fn, r_stego_fn = self.get_id(9), self.get_id(9)
         ri_vars = [self.get_id(8) for _ in range(26)]
-        ri_key_var, ri_ctn, ri_lst, ri_emap, ri_cache, ri_cls, ri_elem, ri_style, ri_zindex, ri_val, ri_match, ri_key, ri_img, ri_canv, ri_ctx, ri_data, ri_out, ri_j, ri_bits, ri_b, ri_idx, ri_cc, ri_fmap, ri_res, ri_r, ri_err = ri_vars
+        (ri_key_var, ri_ctn, ri_lst, ri_emap, ri_cache, ri_cls, ri_elem, ri_style, 
+         ri_zindex, ri_val, ri_match, ri_key, ri_img, ri_canv, ri_ctx, ri_data, 
+         ri_out, ri_j, ri_bits, ri_b, ri_idx, ri_cc, ri_fmap, ri_res, ri_r, ri_err) = ri_vars
 
         obf_user = self.process_js(user_js, r_map, r_pay_var)
         num = lambda n: self.generate_math(n)
 
-        stego_logic, stego_call = "", ""
+        # 3. Component Building
         stego_init = f'let {r_pay_var} = "";'
+        stego_logic, stego_call = "", ""
+        
         if self.stego_payload:
             self.generate_png(os.path.join(output_dir, "asset.png"), carrier_path=carrier)
             stego_init = f'let {r_pay_var} = ""; const {ri_key_var} = {num(self.payload_key)};'
             stego_call = f'{r_pay_var} = await {r_stego_fn}();'
-            stego_logic = f"""
-    const {r_stego_fn} = () => new {r_glob}.Promise({ri_res} => {{
-        const {ri_img} = new {r_glob}.Image(); {ri_img}.src = {self.obf_str("./asset.png", r_map)}; {ri_img}.crossOrigin = {self.obf_str("Anonymous", r_map)};
-        {ri_img}.onload = () => {{
-            const {ri_canv} = {r_glob}.document.createElement({self.obf_str("canvas", r_map)}); const {ri_ctx} = {ri_canv}.getContext({self.obf_str("2d", r_map)});
-            {ri_canv}.width = {ri_img}.width; {ri_canv}.height = {ri_img}.height; {ri_ctx}.drawImage({ri_img}, {num(0)}, {num(0)});
-            const {ri_data} = {ri_ctx}.getImageData({num(0)}, {num(0)}, {ri_img}.width, {ri_img}.height).data;
-            let {ri_out} = "";
-            for(let {ri_j}={num(0)}; {ri_j}<{ri_data}.length; {ri_j}+={num(4)}) {{
-                let {ri_bits} = "";
-                for(let {ri_b}={num(0)}; {ri_b}<{num(8)}; {ri_b}++) {{ 
-                    let {ri_idx} = {ri_j} + ({ri_b} * {num(4)}) + {num(3)};
-                    if({ri_idx} < {ri_data}.length) {ri_bits} += ({ri_data}[{ri_idx}] & {num(1)}); 
-                }}
-                let {ri_cc} = parseInt({ri_bits}, {num(2)}) ^ {ri_key_var};
-                if({ri_cc} === {num(0)}) break;
-                {ri_out} += {r_glob}.String.fromCharCode({ri_cc});
-                {ri_j} += {num(28)};
-            }}
-            {ri_res}({ri_out});
-        }};
-        {ri_img}.onerror = () => {ri_res}("");
-    }});"""
+            
+            with open(stego_tpl_path, "r") as f:
+                stego_tpl_content = f.read()
+            
+            stego_logic = stego_tpl_content.format(
+                r_stego_fn=r_stego_fn, r_glob=r_glob, ri_res=ri_res, ri_img=ri_img,
+                map_png_path=self.obf_str("./asset.png", r_map),
+                map_anon=self.obf_str("Anonymous", r_map),
+                ri_canv=ri_canv, map_canvas=self.obf_str("canvas", r_map),
+                ri_ctx=ri_ctx, map_2d=self.obf_str("2d", r_map),
+                ri_data=ri_data, ri_out=ri_out, ri_j=ri_j, num_4=num(4),
+                ri_bits=ri_bits, ri_b=ri_b, num_8=num(8), ri_idx=ri_idx, 
+                num_3=num(3), ri_key_var=ri_key_var, num_28=num(28)
+            )
 
-        loader = f"""(async () => {{
-    const {r_map} = {{}}; {stego_init}
-    const {r_glob} = (typeof globalThis !== 'undefined') ? globalThis : (typeof window !== 'undefined') ? window : self;
-    const {r_res_fn} = async ({ri_fmap}) => {{
-        const {ri_ctn} = {r_glob}.document.createElement({self.obf_str("div", r_map)});
-        {ri_ctn}.style.cssText = {self.obf_str("position:fixed;top:0;left:0;width:1px;height:1px;z-index:-1;opacity:0.01;overflow:hidden;", r_map)};
-        const {ri_lst} = {r_glob}.Object.values({ri_fmap}).flat();
-        const {ri_emap} = {{}};
-        {ri_lst}.forEach({ri_r} => {{
-            const {ri_elem} = {r_glob}.document.createElement({self.obf_str("b", r_map)}); {ri_elem}.className = {ri_r};
-            {ri_ctn}.appendChild({ri_elem}); {ri_emap}[{ri_r}] = {ri_elem};
-        }});
-        {r_glob}.document.body.appendChild({ri_ctn});
-        await new {r_glob}.Promise({ri_r} => {{ {r_glob}.setTimeout({ri_r}, {num(1000)}); }});
-        const {ri_cache} = {{}};
-        for (const {ri_cls} of {ri_lst}) {{
-            const {ri_elem} = {ri_emap}[{ri_cls}]; const {ri_style} = {r_glob}.getComputedStyle({ri_elem}); const {ri_zindex} = parseInt({ri_style}.zIndex);
-            let {ri_val} = "";
-            if ({ri_zindex} === {num(20)}) {{ {ri_val} += {r_glob}.String.fromCharCode(parseInt({ri_style}.paddingTop), parseInt({ri_style}.paddingRight), parseInt({ri_style}.paddingBottom), parseInt({ri_style}.paddingLeft)).substring({num(0)}, parseInt({ri_style}.width)); }}
-            else if ({ri_zindex} === {num(40)}) {{ const {ri_match} = {ri_style}.backgroundImage.match(/from (.*?)deg/); {ri_val} = {r_glob}.String.fromCharCode({ri_match} ? {r_glob}.Math.round({r_glob}.parseFloat({ri_match}[1])) : {num(0)}); }}
-            else if ({ri_zindex} === {num(10)}) {{ {ri_val} = {r_glob}.String.fromCharCode(parseInt({ri_style}.fontSize)); }} 
-            else if ({ri_zindex} === {num(30)}) {{ {ri_val} = {r_glob}.String.fromCharCode(parseInt({ri_style}.marginTop)); }} 
-            else if ({ri_zindex} === {num(35)}) {{ {ri_val} = {r_glob}.String.fromCharCode(parseInt({ri_style}.order)); }}
-            {ri_cache}[{ri_cls}] = {ri_val};
-        }}
-        for (const {ri_key} in {ri_fmap}) {{ {r_map}[{ri_key}] = {ri_fmap}[{ri_key}].map({ri_cls} => {ri_cache}[{ri_cls}]).join(''); }}
-        {r_glob}.document.body.removeChild({ri_ctn});
-    }};
-    {stego_logic}
-    if (!{r_glob}.document.body) await new {r_glob}.Promise({ri_r} => {{ {r_glob}.onload = {ri_r}; }});
-    await {r_res_fn}({json.dumps(self.string_lookup)});
-    {stego_call}
-    try {{ 
-{obf_user} 
-    }} catch({ri_err}) {{ }}
-}})();"""
+        # 4. Final Assembly
+        with open(main_tpl_path, "r") as f:
+            template_content = f.read()
+
+        loader = template_content.format(
+            r_map=r_map, r_glob=r_glob, stego_init=stego_init, r_res_fn=r_res_fn,
+            ri_fmap=ri_fmap, map_div=self.obf_str("div", r_map), 
+            map_style=self.obf_str("position:fixed;top:0;left:0;width:1px;height:1px;z-index:-1;opacity:0.01;overflow:hidden;", r_map),
+            map_b=self.obf_str("b", r_map), num_1000=num(1000), num_20=num(20), 
+            num_40=num(40), num_10=num(10), num_30=num(30), num_35=num(35),
+            string_lookup_json=json.dumps(self.string_lookup),
+            stego_logic=stego_logic, stego_call=stego_call, obf_user=obf_user,
+            ri_err=ri_err, ri_ctn=ri_ctn, ri_lst=ri_lst, ri_emap=ri_emap, 
+            ri_r=ri_r, ri_elem=ri_elem, ri_cache=ri_cache, ri_cls=ri_cls, 
+            ri_style=ri_style, ri_zindex=ri_zindex, ri_val=ri_val, 
+            ri_match=ri_match, ri_key=ri_key
+        )
         
         with open(os.path.join(output_dir, "obfuscated.js"), "w") as f: f.write(loader)
-        with open(os.path.join(output_dir, "styles.css"), "w") as f: f.write("b {{ display: block; height: 1px; opacity: 0.01; position: absolute; }}\n" + "\n".join(self.css_rules))
-        with open(os.path.join(output_dir, "index.html"), "w") as f: f.write('<!DOCTYPE html><html><head><title>PoC</title><link rel="stylesheet" href="styles.css"></head><body><script src="obfuscated.js"></script></body></html>')
+        with open(os.path.join(output_dir, "styles.css"), "w") as f: 
+            f.write("b { display: block; height: 1px; opacity: 0.01; position: absolute; }\n" + "\n".join(self.css_rules))
+        with open(os.path.join(output_dir, "index.html"), "w") as f: 
+            f.write('<!DOCTYPE html><html><head><title>PoC</title><link rel="stylesheet" href="styles.css"></head><body><script src="obfuscated.js"></script></body></html>')
         print(f"[+] Build Complete. Project saved in: ./{base_name}/")
